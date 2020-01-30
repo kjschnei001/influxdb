@@ -372,8 +372,10 @@ func (s *Server) Err() <-chan error { return s.err }
 
 // Open opens the meta and data store and all services.
 func (s *Server) Open() error {
-	// Start profiling, if set.
-	startProfile(s.CPUProfile, s.MemProfile)
+	// Start profiling if requested.
+	if err := s.startProfile(); err != nil {
+		return err
+	}
 
 	// Open shared TCP connection.
 	ln, err := net.Listen("tcp", s.BindAddress)
@@ -587,27 +589,34 @@ var prof struct {
 }
 
 // StartProfile initializes the cpu and memory profile, if specified.
-func startProfile(cpuprofile, memprofile string) {
-	if cpuprofile != "" {
-		f, err := os.Create(cpuprofile)
+func (s *Server) startProfile() error {
+	if s.CPUProfile != "" {
+		f, err := os.Create(s.CPUProfile)
 		if err != nil {
-			log.Fatalf("cpuprofile: %v", err)
+			return fmt.Errorf("cpuprofile: %v", err)
 		}
-		log.Printf("writing CPU profile to: %s\n", cpuprofile)
+
 		prof.cpu = f
-		pprof.StartCPUProfile(prof.cpu)
+		if err := pprof.StartCPUProfile(prof.cpu); err != nil {
+			return err
+		}
+
+		log.Printf("writing CPU profile to: %s\n", s.CPUProfile)
 	}
 
-	if memprofile != "" {
-		f, err := os.Create(memprofile)
+	if s.MemProfile != "" {
+		f, err := os.Create(s.MemProfile)
 		if err != nil {
-			log.Fatalf("memprofile: %v", err)
+			return fmt.Errorf("memprofile: %v", err)
 		}
-		log.Printf("writing mem profile to: %s\n", memprofile)
+
 		prof.mem = f
 		runtime.MemProfileRate = 4096
+
+		log.Printf("writing mem profile to: %s\n", s.MemProfile)
 	}
 
+	return nil
 }
 
 // StopProfile closes the cpu and memory profiles if they are running.
